@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import altair as alt
 
 st.set_page_config(
     page_title="Arsenal Women Optimal Line Ups",
@@ -51,11 +52,86 @@ tab1, tab2, tab3, tab4 = st.tabs(["Defenders", "Midfielders", "Forwards", "Goalk
 
 with tab1: 
     st.markdown("#### Defenders")
+    
+    defenders_df = df[df['Pos'].str.contains("DF", na=False)]
+    defender_names = defenders_df['Player'].dropna().unique()
+    selected_defender = st.selectbox("Select a Defender", defender_names)
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     with col1: 
-         st.markdown(
-        ":red-background[Emily Fox]"
-         )
+        player_stats = df[df['Player'] == selected_defender].iloc[0]
+        st.metric("Minutes Played", player_stats["Min"], border=True)
+    
+    with col2: 
+        st.metric("Matches Played", player_stats["MP"], border=True)
+    
+    with col3: 
+        st.metric("Matches Started", player_stats["Starts"], border=True)
 
+    with col4: 
+        st.metric("Number of 90s Played", player_stats["90s"], border=True)
 
+st.header("The Decline of Montreal Canadiens", divider = "red")
+
+st.write("Documenting the downfall of the French! <3")
+
+st.subheader("Overall Metrics")
+col1, col2, col3, col4, col5, col6 = st.columns(6)
+
+with col1: 
+    st.metric("Number of Seasons Played", 114, "Since 1909" ,border=True)
+
+with col2: 
+    st.metric("Stanley Cups Won", 24, "#1 Team", border =True)
+
+with col3: 
+    st.metric("Last Stanley Cup Won", "1992-93", "-32 Years", border = True)
+
+with col4: 
+    st.metric("Number of Games Played", 7114, "Avg. 62 games", border = True)
+
+with col5: 
+    st.metric("Number of Reg. Games Won", 3596, "59% Win Rate", border = True)
+
+with col6: 
+    st.metric("Number of Reg. Games Lost", 2463, "-41% Loss Rate", border = True)
+
+st.subheader("Win Rate Per Season Since 1992-93")
+
+# Load the CSV
+df2 = pd.read_csv("montreal canadiens data - combined data.csv")
+
+# Only keep relevant columns
+df2 = df2[['Season', 'Results']]
+
+# Convert to win = 1, tie = 0.5, loss = 0
+df2['Win_Value'] = df2['Results'].map({'W': 1, 'T': 0.5, 'L': 0})
+
+# Group by season and compute win rate
+win_rate_by_season = df2.groupby('Season')['Win_Value'].mean().reset_index()
+win_rate_by_season.columns = ['Season', 'Win Rate']
+
+# Create the line and point chart with red color
+line = alt.Chart(win_rate_by_season).mark_line(color='red', strokeWidth=3).encode(
+    x=alt.X('Season:N', sort=win_rate_by_season['Season'].tolist(), title='Season'),
+    y=alt.Y('Win Rate:Q', scale=alt.Scale(domain=[0, 1]), title='Win Rate'),
+    tooltip=['Season', 'Win Rate']
+)
+
+points = alt.Chart(win_rate_by_season).mark_point(color='red', size=60).encode(
+    x='Season:N',
+    y='Win Rate:Q',
+    tooltip=['Season', 'Win Rate']
+)
+
+# Combine line and points
+chart = (line + points).properties(
+    width=700,
+    height=400
+).configure_axis(
+    labelFontSize=12,
+    titleFontSize=14
+)
+
+# Display the chart
+st.altair_chart(chart, use_container_width=True)
