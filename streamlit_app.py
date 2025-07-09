@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+import numpy as np
 
 st.set_page_config(
     page_title="Arsenal Women Optimal Line Ups",
@@ -135,3 +136,127 @@ chart = (line + points).properties(
 
 # Display the chart
 st.altair_chart(chart, use_container_width=True)
+
+st.subheader("", divider="rainbow")
+
+st.header("2024 International Women's Big Data Cup Analysis")
+
+hockey_data = pd.read_csv('BDC_2024_Womens_Data.csv')
+
+#Metric - Corsi
+corsi_details = ['On Net', 'Missed', 'Blocked']
+corsi_df = hockey_data[(hockey_data['Event'] == 'Shot') & (hockey_data['Detail 2'].isin(corsi_details))]
+corsi_counts = corsi_df.groupby('Team').size().reset_index(name='Corsi For')
+
+#Metric - Fenwick
+fenwick_details = ['On Net', 'Missed'] 
+fenwick_df = hockey_data[(hockey_data['Event'] == 'Shot') & (hockey_data['Detail 2'].isin(fenwick_details))]
+fenwick_counts = fenwick_df.groupby('Team').size().reset_index(name='Fenwick For')
+
+#XG?
+# Step 1: Get all valid shots
+valid_shots = hockey_data[(hockey_data['Event'] == 'Shot') & (hockey_data['Detail 2'].isin(['On Net', 'Missed', 'Blocked']))].copy()
+
+# Step 2: Calculate distance to goal (assume net at (100, 42.5))
+valid_shots['Shot_Distance'] = np.sqrt((100 - valid_shots['X Coordinate'])**2 + (42.5 - valid_shots['Y Coordinate'])**2)
+
+# Step 3: Compute xG proxy
+valid_shots['xG_proxy'] = 1 / (1 + valid_shots['Shot_Distance'])
+
+# Step 4: Sum xG by team
+xg_by_team = valid_shots.groupby('Team')['xG_proxy'].sum().reset_index(name='Total xG (proxy)')
+
+# Step 5: Extract for Canada and USA
+canada_xg = xg_by_team[xg_by_team['Team'] == 'Women - Canada']
+usa_xg = xg_by_team[xg_by_team['Team'] == 'Women - United States']
+
+
+st.subheader("Canada")
+
+col1, col2, col3, col4, col5, col6 = st.columns(6)
+
+with col1: 
+    canada_corsi = corsi_counts.loc[corsi_counts['Team'] == 'Women - Canada', 'Corsi For'].values[0]
+    st.metric("Corsi Counts", canada_corsi,border=True)
+
+with col2: 
+    canada_fenwick = fenwick_counts.loc[fenwick_counts['Team'] == 'Women - Canada', 'Fenwick For'].values[0]
+    st.metric("Fenwick Counts", canada_fenwick,border=True)
+
+with col3: 
+    canada_xg_value = float(canada_xg['Total xG (proxy)'].values[0])
+    st.metric("Total xG", round(canada_xg_value, 4), border = True)
+
+st.subheader("USA")
+
+col1, col2, col3, col4, col5, col6 = st.columns(6)
+
+with col1: 
+    usa_corsi = corsi_counts.loc[corsi_counts['Team'] == 'Women - United States', 'Corsi For'].values[0]
+    st.metric("Corsi Counts", usa_corsi,border=True)
+
+with col2: 
+    usa_fenwick = fenwick_counts.loc[fenwick_counts['Team'] == 'Women - United States', 'Fenwick For'].values[0]
+    st.metric("Fenwick Counts", usa_fenwick,border=True)
+
+with col3: 
+    usa_xg_value = float(usa_xg['Total xG (proxy)'].values[0])
+    st.metric("Total xG", round(usa_xg_value, 4), border= True)
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+
+st.title("Flipped Shot Density Heatmap Over Rink")
+
+#load impage
+rink_img = mpimg.imread("rink_coords.png")     
+
+# Filter valid shots
+shot_df = hockey_data[
+    (hockey_data['Event'] == 'Shot') &
+    (hockey_data['Detail 2'].isin(['On Net', 'Missed', 'Blocked']))
+].copy()
+
+# Optional: team filter
+teams = shot_df['Team'].dropna().unique()
+selected_team = st.selectbox("Select a team to display shots", ["All Teams"] + sorted(teams.tolist()))
+
+
+
+if selected_team != "All Teams":
+    shot_df = shot_df[shot_df['Team'] == selected_team]
+
+# Plotting
+fig, ax = plt.subplots(figsize=(12, 6))
+
+# Flip the rink image horizontally
+ax.imshow(rink_img, extent=[200, 0, 0, 85], aspect='auto', zorder=0)
+
+# Heatmap of shot density
+sns.kdeplot(
+    data=shot_df,
+    x='X Coordinate',
+    y='Y Coordinate',
+    cmap='coolwarm',
+    fill=True,
+    thresh=0.01,
+    alpha=0.7,
+    bw_adjust=1.2,
+    ax=ax,
+    zorder=1
+)
+
+# Format plot
+ax.set_xlim(200, 0)
+ax.set_ylim(0, 85)
+ax.set_title(f"Shot Density Heatmap - {selected_team}", fontsize=14, color='white' if st.get_option('theme.base') == 'dark' else 'black')
+ax.set_xlabel("X Coordinate")
+ax.set_ylabel("Y Coordinate")
+
+# Optional: dark theme support
+ax.set_facecolor('black' if st.get_option('theme.base') == 'dark' else 'white')
+fig.patch.set_facecolor('black' if st.get_option('theme.base') == 'dark' else 'white')
+
+# Display
+st.pyplot(fig)
